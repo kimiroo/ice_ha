@@ -7,7 +7,8 @@ from homeassistant.core import HomeAssistant
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.typing import ConfigType
 
-from .const import DOMAIN, WEBSOCKET_PORT, HEARTBEAT_TIMEOUT
+from .const import DOMAIN, WEBSOCKET_PORT, HEARTBEAT_TIMEOUT, CONF_PC_IP, CONF_PC_NAME
+from . import PC_SENSORS
 
 _LOGGER = logging.getLogger(__name__)
 
@@ -17,24 +18,27 @@ PLATFORMS = ["binary_sensor"]
 # Dictionary to store connected clients and their last heartbeat time
 CONNECTED_CLIENTS = {}
 # Dictionary to store references to binary_sensor entities
-PC_SENSORS = {}
+# PC_SENSORS = {} # Moved to binary_sensor.py to manage its own entities
 
 async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
-    """Set up the ICE WebSocket Server component."""
+    """Set up the ICE WebSocket Monitor component."""
     hass.data.setdefault(DOMAIN, {})
 
-    # Start the WebSocket server
-    asyncio.create_task(_start_websocket_server(hass))
-    _LOGGER.info(f"WebSocket server starting on port {WEBSOCKET_PORT}")
-
-    # Start the heartbeat monitoring task
-    asyncio.create_task(_monitor_heartbeats(hass))
-    _LOGGER.info(f"Heartbeat monitor started with timeout {HEARTBEAT_TIMEOUT}s")
+    # Start the WebSocket server only once
+    if not hass.data[DOMAIN].get("server_started"):
+        asyncio.create_task(_start_websocket_server(hass))
+        _LOGGER.info(f"ICE WebSocket server starting on port {WEBSOCKET_PORT}")
+        asyncio.create_task(_monitor_heartbeats(hass))
+        _LOGGER.info(f"Heartbeat monitor started with timeout {HEARTBEAT_TIMEOUT}s")
+        hass.data[DOMAIN]["server_started"] = True
 
     return True
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
-    """Set up ICE WebSocket Server from a config entry."""
+    """Set up ICE WebSocket Monitor from a config entry."""
+    # Store the config entry data for use by platforms
+    hass.data[DOMAIN][entry.entry_id] = entry.data
+
     # Forward the setup to the binary_sensor platform
     hass.async_create_task(
         hass.config_entries.async_forward_entry_setup(entry, "binary_sensor")
@@ -46,8 +50,11 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     # Unload the binary_sensor platform
     unload_ok = await hass.config_entries.async_forward_entry_unload(entry, "binary_sensor")
     if unload_ok:
-        # TODO: Gracefully stop the websocket server if it's running
-        _LOGGER.info("ICE WebSocket Server integration unloaded.")
+        # Clean up data associated with this config entry
+        if entry.entry_id in hass.data[DOMAIN]:
+            del hass.data[DOMAIN][entry.entry_id]
+        _LOGGER.info(f"ICE WebSocket Monitor entry {entry.entry_id} unloaded.")
+        # If no more entries, consider stopping the server (more complex for this example)
     return unload_ok
 
 async def _websocket_handler(websocket, path):
@@ -55,32 +62,21 @@ async def _websocket_handler(websocket, path):
     client_ip = websocket.remote_address[0]
     _LOGGER.info(f"New WebSocket connection from {client_ip}")
 
-    # Assume client sends its name/ID on first connect or periodically
-    # For simplicity, let's just use IP as ID for now.
+    # For now, use client_ip as pc_id. In a more advanced setup,
+    # client might send its configured ID/name.
     pc_id = client_ip
-
-    # If this is a new PC, create a binary_sensor for it
-    if pc_id not in PC_SENSORS:
-        # This part requires the binary_sensor to be set up.
-        # In a real integration, you might add a discovery mechanism or
-        # require manual configuration of PCs.
-        # For this example, we'll assume binary_sensor.py can handle dynamic creation
-        # or that these IPs are pre-configured.
-        _LOGGER.warning(f"PC {pc_id} connected but no sensor found. Ensure it's configured in binary_sensor.py or discovered.")
-        # For this basic example, we'll just add it to connected clients
-        # A more robust solution would dynamically create sensor entities here.
 
     CONNECTED_CLIENTS[pc_id] = datetime.now()
     _LOGGER.debug(f"Client {pc_id} added to connected list.")
 
     # Update sensor state to ON
-    if pc_id in PC_SENSORS:
+    if pc_id in PC_SENSORS: # PC_SENSORS is managed by binary_sensor.py
         sensor = PC_SENSORS[pc_id]
-        if sensor.state != "on":
+        if not sensor.is_on: # Use is_on property
             sensor.set_state("on")
             _LOGGER.info(f"PC {pc_id} status updated to ON.")
     else:
-        _LOGGER.warning(f"Sensor for {pc_id} not found. Cannot update state.")
+        _LOGGER.warning(f"Sensor for {pc_id} not found. Ensure it's configured via UI.")
 
 
     try:
@@ -91,7 +87,7 @@ async def _websocket_handler(websocket, path):
             # If state was OFF, turn it ON again (e.g., after temporary disconnect)
             if pc_id in PC_SENSORS:
                 sensor = PC_SENSORS[pc_id]
-                if sensor.state != "on":
+                if not sensor.is_on:
                     sensor.set_state("on")
                     _LOGGER.info(f"PC {pc_id} status updated to ON (heartbeat).")
 
@@ -109,20 +105,21 @@ async def _websocket_handler(websocket, path):
         # Mark sensor offline immediately on disconnect
         if pc_id in PC_SENSORS:
             sensor = PC_SENSORS[pc_id]
-            if sensor.state != "off":
+            if sensor.is_on: # Use is_on property
                 sensor.set_state("off")
                 _LOGGER.info(f"PC {pc_id} status updated to OFF (disconnected).")
 
 
 async def _start_websocket_server(hass: HomeAssistant):
-    """Start the WebSocket server."""
+    """Start the ICE WebSocket server."""
     try:
         server = await websockets.serve(
             _websocket_handler, "0.0.0.0", WEBSOCKET_PORT
         )
+        _LOGGER.info(f"ICE WebSocket server listening on port {WEBSOCKET_PORT}")
         await server.wait_closed()
     except Exception as e:
-        _LOGGER.error(f"Failed to start WebSocket server: {e}")
+        _LOGGER.error(f"Failed to start ICE WebSocket server: {e}")
 
 async def _monitor_heartbeats(hass: HomeAssistant):
     """Monitor heartbeats and mark PCs offline if timeout occurs."""
@@ -141,7 +138,7 @@ async def _monitor_heartbeats(hass: HomeAssistant):
                 # Update sensor state to OFF
                 if pc_id in PC_SENSORS:
                     sensor = PC_SENSORS[pc_id]
-                    if sensor.state != "off":
+                    if sensor.is_on: # Use is_on property
                         sensor.set_state("off")
                         _LOGGER.info(f"PC {pc_id} status updated to OFF (heartbeat timeout).")
                 else:

@@ -39,8 +39,8 @@ class MyWebSocketMonitorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 
         # Show the form to the user
         data_schema = vol.Schema({
-            vol.Required(CONF_PC_IP, name="PC IP", description={"suggested_value": "192.168.1.100"}): str,
-            vol.Optional(CONF_PC_NAME, name="PC Name"): str,
+            vol.Required(CONF_PC_IP, description={"name": "PC IP", "suggested_value": "192.168.1.100"}): str,
+            vol.Optional(CONF_PC_NAME, description={"name": "PC Name (Optional)"}): str,
         })
         return self.async_show_form(
             step_id="user",

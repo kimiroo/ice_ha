@@ -1,4 +1,5 @@
 {
   "domain": "ice_ha",
-  "name": "ICE HomeAssistant Component"
+  "name": "ICE HomeAssistant Component",
+  "version": "0.0.1"
 }

@@ -1,0 +1,13 @@
+{
+  "config": {
+    "step": {
+      "user": {
+          "title": "Add ICE Client",
+          "data": {
+              "pc_ip": "IP Address",
+              "pc_name": "Name (Optional)"
+          }
+      }
+    }
+  }
+}

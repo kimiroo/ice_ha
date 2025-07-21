@@ -8,7 +8,7 @@ from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.typing import ConfigType
 
 from .const import DOMAIN, WEBSOCKET_PORT, HEARTBEAT_TIMEOUT, CONF_PC_IP, CONF_PC_NAME
-from . import PC_SENSORS
+from .binary_sensor import PC_SENSORS
 
 _LOGGER = logging.getLogger(__name__)
 

@@ -58,10 +58,11 @@ class MyWebSocketMonitorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
 class MyWebSocketMonitorOptionsFlowHandler(config_entries.OptionsFlow):
     """Options flow for My WebSocket Monitor."""
 
-    def __init__(self, config_entry):
+    @property
+    def config_entry(self):
         """Initialize options flow."""
-        self.config_entry = config_entry
+        return self.hass.config_entries.async_get_entry(self.handler)
 
-    async def async_step_init(self, user_input=None):
-        """Manage the options."""
-        return self.async_show_form(step_id="init", data_schema=vol.Schema({})) # No options to change for now
+    #async def async_step_init(self, user_input=None):
+    #    """Manage the options."""
+    #    return self.async_show_form(step_id="init", data_schema=vol.Schema({})) # No options to change for now

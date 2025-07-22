@@ -1,5 +1,3 @@
-# custom_components/my_websocket_monitor/const.py
-
 """Constants for the ICE HA Server integration."""
 
 DOMAIN = "ice_ha"

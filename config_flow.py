@@ -1,5 +1,3 @@
-# custom_components/my_websocket_monitor/config_flow.py
-
 import logging
 import voluptuous as vol
 
@@ -10,8 +8,8 @@ from .const import DOMAIN, CONF_PC_IP, CONF_PC_NAME
 
 _LOGGER = logging.getLogger(__name__)
 
-class MyWebSocketMonitorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Config flow for My WebSocket Monitor."""
+class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Config flow for ICE WebSocket Monitor."""
 
     VERSION = 1
     CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL # Or CONN_CLASS_LOCAL_PUSH
@@ -56,7 +54,7 @@ class MyWebSocketMonitorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         return OptionsFlowHandler()
 
 class OptionsFlowHandler(config_entries.OptionsFlow):
-    """Options flow for My WebSocket Monitor."""
+    """Options flow for ICE WebSocket Monitor."""
 
     @property
     def config_entry(self):

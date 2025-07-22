@@ -38,5 +38,3 @@ def capture_frame_and_encode_base64(rtsp_url):
         print(f"Error: Could not read a frame from the stream {rtsp_url}.")
         print("This might happen if the stream is empty or disconnected immediately.")
         return None
-
-print(capture_frame_and_encode_base64(URL))

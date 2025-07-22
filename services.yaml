@@ -1,5 +1,4 @@
 broadcast_message:
-  icon: mdi:message-arrow-right-outline
   fields:
     message:
       name: Message

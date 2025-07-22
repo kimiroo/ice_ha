@@ -16,7 +16,7 @@
       }
     }
   },
-  "service_fields": {
+  "services": {
     "broadcast_message": {
       "name": "Send Message to ICE Clients",
       "description": "Sends a message to all connected ICE clients.",

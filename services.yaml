@@ -1,8 +1,6 @@
 broadcast_message:
   fields:
     message:
-      name: Message
-      description: Message to send to connected ICE clients
       required: true
       selector:
         text:

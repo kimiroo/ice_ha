@@ -63,6 +63,6 @@ class MyWebSocketMonitorOptionsFlowHandler(config_entries.OptionsFlow):
         """Initialize options flow."""
         return self.hass.config_entries.async_get_entry(self.handler)
 
-    #async def async_step_init(self, user_input=None):
-    #    """Manage the options."""
-    #    return self.async_show_form(step_id="init", data_schema=vol.Schema({})) # No options to change for now
+    async def async_step_init(self, user_input=None):
+        """Manage the options."""
+        return self.async_show_form(step_id="init", data_schema=vol.Schema({})) # No options to change for now

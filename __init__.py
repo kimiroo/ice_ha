@@ -1,11 +1,13 @@
+import json
 import asyncio
 import logging
 import websockets
 from datetime import datetime, timedelta
 
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, ServiceCall
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.helpers.typing import ConfigType
+import voluptuous as vol # Add for service schema definition
 
 from .const import DOMAIN, WEBSOCKET_PORT, HEARTBEAT_TIMEOUT, CONF_PC_IP, CONF_PC_NAME
 from .binary_sensor import PC_SENSORS
@@ -32,6 +34,17 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         _LOGGER.info(f"Heartbeat monitor started with timeout {HEARTBEAT_TIMEOUT}s")
         hass.data[DOMAIN]["server_started"] = True
 
+    # Register the broadcast service
+    hass.services.async_register(
+        DOMAIN,
+        "broadcast_message", # Service name
+        handle_broadcast_message,
+        schema=vol.Schema({
+            vol.Required("message"): str, # Requires 'message' string argument
+            vol.Optional("target_ip"): str, # Optional 'target_ip' argument for specific PC
+        }),
+    )
+    _LOGGER.info(f"Service '{DOMAIN}.broadcast_message' registered.")
     return True
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
@@ -66,7 +79,7 @@ async def _websocket_handler(websocket, path):
     # client might send its configured ID/name.
     pc_id = client_ip
 
-    CONNECTED_CLIENTS[pc_id] = datetime.now()
+    CONNECTED_CLIENTS[pc_id] = {"last_heartbeat": datetime.now(), "websocket": websocket} # Store datetime and websocket object
     _LOGGER.debug(f"Client {pc_id} added to connected list.")
 
     # Update sensor state to ON
@@ -83,7 +96,7 @@ async def _websocket_handler(websocket, path):
         async for message in websocket:
             # Assume any message is a heartbeat
             _LOGGER.debug(f"Received heartbeat from {pc_id}: {message}")
-            CONNECTED_CLIENTS[pc_id] = datetime.now()
+            CONNECTED_CLIENTS[pc_id]["last_heartbeat"] = datetime.now() # Update only heartbeat time
             # If state was OFF, turn it ON again (e.g., after temporary disconnect)
             if pc_id in PC_SENSORS:
                 sensor = PC_SENSORS[pc_id]
@@ -130,8 +143,8 @@ async def _monitor_heartbeats(hass: HomeAssistant):
 
         # Create a copy of keys to avoid RuntimeError: dictionary changed size during iteration
         for pc_id in list(CONNECTED_CLIENTS.keys()):
-            last_heartbeat = CONNECTED_CLIENTS.get(pc_id)
-            if last_heartbeat and (now - last_heartbeat) > offline_threshold:
+            client_data = CONNECTED_CLIENTS.get(pc_id) # Get the client data dictionary
+            if client_data and (now - client_data["last_heartbeat"]) > offline_threshold: # Access last_heartbeat from dict
                 _LOGGER.warning(f"PC {pc_id} heartbeat timeout. Marking offline.")
                 # Remove from connected clients
                 del CONNECTED_CLIENTS[pc_id]
@@ -143,3 +156,40 @@ async def _monitor_heartbeats(hass: HomeAssistant):
                         _LOGGER.info(f"PC {pc_id} status updated to OFF (heartbeat timeout).")
                 else:
                     _LOGGER.warning(f"Sensor for {pc_id} not found. Cannot update state.")
+
+async def handle_broadcast_message(call: ServiceCall):
+    """Handle the broadcast_message service call."""
+    message = call.data.get("message")
+    _LOGGER.info(f"Received broadcast service call: message='{message}'")
+
+    if not message:
+        _LOGGER.warning("Broadcast message is empty. Skipping.")
+        return
+
+    # Construct the message as JSON for the client to parse
+    payload = json.dumps({"type": "broadcast", "message": message})
+
+    # Broadcast message to all connected clients
+    if not CONNECTED_CLIENTS: # Use CONNECTED_CLIENTS
+        _LOGGER.info("No active WebSocket clients to broadcast to.")
+        return
+
+    tasks = []
+    for pc_id, client_data in list(CONNECTED_CLIENTS.items()): # Iterate over unified dict
+        websocket = client_data["websocket"] # Get websocket object
+        tasks.append(_send_message_to_client(websocket, payload, pc_id))
+
+    await asyncio.gather(*tasks, return_exceptions=True) # Wait for all send operations
+
+
+async def _send_message_to_client(websocket, message, pc_id):
+    """Helper function to send a message to a single client."""
+    try:
+        await websocket.send(message)
+        _LOGGER.debug(f"Successfully sent broadcast message to {pc_id}")
+    except Exception as e:
+        _LOGGER.error(f"Failed to send broadcast message to {pc_id}: {e}")
+        # Remove client from active connections if sending fails
+        if pc_id in CONNECTED_CLIENTS: # Remove from unified dict if send fails
+            del CONNECTED_CLIENTS[pc_id]
+            _LOGGER.info(f"Client {pc_id} removed from active connections due to send failure.")

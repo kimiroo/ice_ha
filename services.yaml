@@ -1,1 +1,9 @@
-is_dummy_file: true
+broadcast_message:
+  icon: mdi:message-arrow-right-outline
+  fields:
+    message:
+      name: Message
+      description: Message to send to connected ICE clients
+      required: true
+      selector:
+        text:

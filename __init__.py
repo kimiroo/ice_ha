@@ -40,8 +40,7 @@ async def async_setup(hass: HomeAssistant, config: ConfigType) -> bool:
         "broadcast_message", # Service name
         handle_broadcast_message,
         schema=vol.Schema({
-            vol.Required("message"): str, # Requires 'message' string argument
-            vol.Optional("target_ip"): str, # Optional 'target_ip' argument for specific PC
+            vol.Required("message"): str # Requires 'message' string argument
         }),
     )
     _LOGGER.info(f"Service '{DOMAIN}.broadcast_message' registered.")

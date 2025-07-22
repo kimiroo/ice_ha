@@ -53,9 +53,9 @@ class MyWebSocketMonitorConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
         """Get the options flow for this handler."""
         # For this simple integration, we don't need an options flow,
         # but you might implement one if you want to allow editing IP/name later.
-        return MyWebSocketMonitorOptionsFlowHandler(config_entry)
+        return OptionsFlowHandler()
 
-class MyWebSocketMonitorOptionsFlowHandler(config_entries.OptionsFlow):
+class OptionsFlowHandler(config_entries.OptionsFlow):
     """Options flow for My WebSocket Monitor."""
 
     @property
@@ -65,4 +65,32 @@ class MyWebSocketMonitorOptionsFlowHandler(config_entries.OptionsFlow):
 
     async def async_step_init(self, user_input=None):
         """Manage the options."""
-        return self.async_show_form(step_id="init", data_schema=vol.Schema({})) # No options to change for now
+
+        # Get current values
+        current_data = self.config_entry.data
+        current_pc_ip = current_data.get(CONF_PC_IP)
+        current_pc_name = current_data.get(CONF_PC_NAME)
+
+        if user_input is not None:
+            # New user entered value
+            new_pc_name = user_input.get(CONF_PC_NAME)
+
+            updated_data = {
+                CONF_PC_IP: current_pc_ip,
+                CONF_PC_NAME: new_pc_name if new_pc_name else current_pc_name
+            }
+
+            # Update config entry
+            return self.async_create_entry(
+                title=updated_data[CONF_PC_NAME],
+                data=updated_data
+            )
+
+        # Show the form to the user
+        data_schema = vol.Schema({
+            vol.Optional(CONF_PC_NAME, default=current_pc_name): str,
+        })
+        return self.async_show_form(
+            step_id="init",
+            data_schema=data_schema
+        )

@@ -7,6 +7,12 @@
               "pc_ip": "IP Address",
               "pc_name": "Name (Optional)"
           }
+      },
+      "init": {
+          "title": "Edit ICE Client",
+          "data": {
+              "pc_name": "Name (Optional)"
+          }
       }
     }
   }

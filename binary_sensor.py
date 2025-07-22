@@ -66,4 +66,4 @@ class PCStatusBinarySensor(BinarySensorEntity):
     @property
     def device_class(self):
         """Return the device class of the sensor."""
-        return "presence" # Or 'connectivity', 'running' etc.
+        return "connectivity" # https://www.home-assistant.io/integrations/binary_sensor/#device-class

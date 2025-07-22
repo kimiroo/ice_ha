@@ -28,7 +28,7 @@
       }
     }
   },
-  "options": {
+  "selector": {
     "ws_message": {
       "kill": "Kill Clients",
       "movement": "Report Movement"

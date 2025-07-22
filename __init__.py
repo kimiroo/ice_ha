@@ -12,6 +12,9 @@ import voluptuous as vol # Add for service schema definition
 from .const import DOMAIN, WEBSOCKET_PORT, HEARTBEAT_TIMEOUT, CONF_PC_IP, CONF_PC_NAME
 from .binary_sensor import PC_SENSORS
 
+#dev
+from .rtsp import capture_frame_and_encode_base64, URL
+
 _LOGGER = logging.getLogger(__name__)
 
 # List of platforms that this integration supports.
@@ -166,7 +169,14 @@ async def handle_broadcast_message(call: ServiceCall):
         return
 
     # Construct the message as JSON for the client to parse
-    payload = json.dumps({"type": "broadcast", "message": message})
+    payload = {
+        "type": "broadcast",
+        "message": message
+    }
+    if message == 'movement':
+        image_base64 = capture_frame_and_encode_base64(URL)
+        payload["image"] = image_base64
+    payload = json.dumps(payload)
 
     # Broadcast message to all connected clients
     if not CONNECTED_CLIENTS: # Use CONNECTED_CLIENTS

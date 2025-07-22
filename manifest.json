@@ -2,6 +2,7 @@
   "domain": "ice_ha",
   "name": "ICE HomeAssistant Component",
   "config_flow": true,
+  "services": false,
   "version": "0.0.1",
   "codeowners": ["@kimiroo"],
   "requirements": ["websockets>=12.0"]

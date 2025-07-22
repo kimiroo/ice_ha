@@ -41,14 +41,14 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     # Forward the setup to the binary_sensor platform
     hass.async_create_task(
-        hass.config_entries.async_forward_entry_setups(entry, "binary_sensor")
+        hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     )
     return True
 
 async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     """Unload a config entry."""
     # Unload the binary_sensor platform
-    unload_ok = await hass.config_entries.async_forward_entry_unload(entry, "binary_sensor")
+    unload_ok = await hass.config_entries.async_forward_entry_unload(entry, PLATFORMS)
     if unload_ok:
         # Clean up data associated with this config entry
         if entry.entry_id in hass.data[DOMAIN]:

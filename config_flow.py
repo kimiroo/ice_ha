@@ -72,6 +72,7 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
         if user_input is not None:
             # New user entered value
             new_pc_name = user_input.get(CONF_PC_NAME)
+            _LOGGER.error(f"Client edited: {new_pc_name}")
 
             updated_data = {
                 CONF_PC_IP: current_pc_ip,

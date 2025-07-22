@@ -64,32 +64,9 @@ class OptionsFlowHandler(config_entries.OptionsFlow):
     async def async_step_init(self, user_input=None):
         """Manage the options."""
 
-        # Get current values
-        current_data = self.config_entry.data
-        current_pc_ip = current_data.get(CONF_PC_IP)
-        current_pc_name = current_data.get(CONF_PC_NAME)
-
-        if user_input is not None:
-            # New user entered value
-            new_pc_name = user_input.get(CONF_PC_NAME)
-            _LOGGER.error(f"Client edited: {new_pc_name}")
-
-            updated_data = {
-                CONF_PC_IP: current_pc_ip,
-                CONF_PC_NAME: new_pc_name if new_pc_name else current_pc_name
+        return self.async_abort(
+            reason="not_supported",
+            description_placeholders={
+                "message": "현재 이 기기의 옵션 설정은 지원되지 않습니다. 기기를 제거한 후 다시 추가해주세요.",
             }
-
-            # Update config entry
-            return self.async_create_entry(
-                title=updated_data[CONF_PC_NAME],
-                data=updated_data
-            )
-
-        # Show the form to the user
-        data_schema = vol.Schema({
-            vol.Optional(CONF_PC_NAME, default=current_pc_name): str,
-        })
-        return self.async_show_form(
-            step_id="init",
-            data_schema=data_schema
         )

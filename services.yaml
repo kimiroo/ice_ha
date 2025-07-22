@@ -3,4 +3,8 @@ broadcast_message:
     message:
       required: true
       selector:
-        text:
+        select:
+          translation_key: "ws_message"
+          options:
+            - "kill"
+            - "movement"

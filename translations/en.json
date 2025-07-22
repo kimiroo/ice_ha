@@ -23,9 +23,15 @@
       "fields": {
         "message": {
           "name": "Message",
-          "description": "The message content to send."
+          "description": "Select the type of message to send to the client."
         }
       }
+    }
+  },
+  "options": {
+    "ws_message": {
+      "kill": "Kill Clients",
+      "movement": "Report Movement"
     }
   }
 }

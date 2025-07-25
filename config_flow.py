@@ -1,72 +1,173 @@
 import logging
+import asyncio
+import socketio
 import voluptuous as vol
 
 from homeassistant import config_entries
 from homeassistant.core import callback
 
-from .const import DOMAIN, CONF_PC_IP, CONF_PC_NAME
+from .const import DOMAIN
 
 _LOGGER = logging.getLogger(__name__)
 
-class ConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
-    """Config flow for ICE WebSocket Monitor."""
+# Define schema for the user input
+DATA_SCHEMA = vol.Schema({
+    vol.Required("client_name"): str,
+    vol.Required("host"): str,
+    vol.Required("port", default=80): int,
+    vol.Optional("use_ssl", default=False): bool,
+    vol.Optional("auth_token"): str, # Optional authentication token
+})
+
+async def test_connection(client_name: str, host: str, port: int, use_ssl: bool = False, auth_token: str = ""):
+    sio = socketio.AsyncClient()
+    sio_event = asyncio.Event()
+    sio_success = False
+    sio_message = ''
+
+    @sio.on('connected')
+    async def on_connected(data):
+        nonlocal sio_success
+        _LOGGER.info(f"Received connected message during connection test: {data}")
+        sio_success = True
+        sio_event.set() # Signal that the message was received
+
+    @sio.on('error')
+    async def on_error(data):
+        nonlocal sio_success, sio_message
+        _LOGGER.error(f"Received error message during connection test: {data}")
+        sio_success = False
+        sio_message = data.get('message', '')
+        sio_event.set() # Signal that the message was received
+
+    # Generate URI
+    scheme = "https" if use_ssl else "http"
+    uri = f"{scheme}://{host}:{port}"
+
+    connect_kwargs = {}
+
+    # Generate Headers
+    headers = {
+        'X-Client-Type': 'test',
+        'X-Client-Name': client_name
+    }
+    # 1. If auth_token exists, add Authorization header.
+    if auth_token:
+        headers['Authorization'] = f'Bearer {auth_token}'
+
+    connect_kwargs["headers"] = headers
+
+    # 2. Specify Transports
+    connect_kwargs["transports"] = ['websocket', 'polling']
+
+    connection_timeout = 5 # seconds for connection and message receipt
+
+    try:
+        _LOGGER.info(f"Attempting to connect to Socket.IO server at {uri} for connection test...")
+
+        # Connect to the server
+        await sio.connect(uri, **connect_kwargs)
+        _LOGGER.info("Successfully initiated Socket.IO connection for test. Waiting for 'connected' or 'error' message...")
+
+        # Wait for the specific message with a timeout
+        await asyncio.wait_for(sio_event.wait(), timeout=connection_timeout)
+
+        _LOGGER.info(f"Test result received: Success={sio_success}, Message='{sio_message}'")
+        return sio_success, sio_message
+
+    except socketio.exceptions.ConnectionError as e:
+        _LOGGER.error(f"Socket.IO Connection Error to {uri}: {e}")
+        return False, str(e) # Return the error message as string
+
+    except asyncio.TimeoutError:
+        _LOGGER.error(f"Timed out waiting for 'connected' or 'error' message from Socket.IO server at {uri} after {connection_timeout} seconds.")
+        return False, "timeout"
+
+    except Exception as e:
+        _LOGGER.error(f"Unexpected error during Socket.IO connection test to {uri}: {e}", exc_info=True)
+        return False, str(e)
+
+    finally:
+        # Always disconnect to clean up resources
+        if sio.connected:
+            await sio.disconnect()
+
+class ICEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
+    """Config flow for Your Socket.IO Integration."""
 
     VERSION = 1
-    CONNECTION_CLASS = config_entries.CONN_CLASS_LOCAL_POLL # Or CONN_CLASS_LOCAL_PUSH
 
     async def async_step_user(self, user_input=None):
-        """Handle the initial step."""
+        """Handle a flow initiated by the user."""
         errors = {}
+
         if user_input is not None:
-            # Validate user input (e.g., check if IP is valid, though not strictly required for this example)
-            pc_ip = user_input[CONF_PC_IP]
-            pc_name = user_input.get(CONF_PC_NAME)
+            client_name = user_input["client_name"]
+            host = user_input["host"]
+            port = user_input["port"]
+            use_ssl = user_input["use_ssl"]
+            auth_token = user_input.get("auth_token")
 
-            # Check if this PC IP is already configured
-            await self.async_set_unique_id(pc_ip)
-            self._abort_if_unique_id_configured()
+            # Validate the connection
+            test_success = False
+            sio_message = 'cannot_connect'
+            try:
+                _LOGGER.debug(f"Attempting to validate connection...")
+                test_success, sio_message = await test_connection(
+                    client_name=client_name,
+                    host=host,
+                    port=port,
+                    use_ssl=use_ssl,
+                    auth_token=auth_token
+                )
+            except Exception as e:
+                _LOGGER.error("Failed to connect to Socket.IO server: %s", e)
+                errors["base"] = "cannot_connect" # Error key for HA frontend
+            finally:
+                if not test_success:
+                    errors["base"] = sio_message # Error key for HA frontend
 
-            # Create a config entry
-            return self.async_create_entry(
-                title=pc_name if pc_name else pc_ip,
-                data={
-                    CONF_PC_IP: pc_ip,
-                    CONF_PC_NAME: pc_name,
-                },
-            )
+            if not errors:
+                # If validation passes, create a config entry
+                return self.async_create_entry(
+                    title=f"Socket.IO Server ({host}:{port})",
+                    data=user_input, # Store all user input data
+                )
 
         # Show the form to the user
-        data_schema = vol.Schema({
-            vol.Required(CONF_PC_IP, description={"suggested_value": "192.168.1.100"}): str,
-            vol.Optional(CONF_PC_NAME): str,
-        })
         return self.async_show_form(
             step_id="user",
-            data_schema=data_schema,
+            data_schema=DATA_SCHEMA,
             errors=errors,
         )
 
+    # If you need to handle re-configuration (e.g., from Options Flow),
+    # you would implement async_step_init and async_step_options
     @callback
     def async_get_options_flow(config_entry):
         """Get the options flow for this handler."""
-        # For this simple integration, we don't need an options flow,
-        # but you might implement one if you want to allow editing IP/name later.
-        return OptionsFlowHandler()
+        return ICEOptionsFlow(config_entry)
 
-class OptionsFlowHandler(config_entries.OptionsFlow):
-    """Options flow for ICE WebSocket Monitor."""
+class ICEOptionsFlow(config_entries.OptionsFlow):
+    """Options flow for Your Socket.IO Integration."""
 
-    @property
-    def config_entry(self):
+    def __init__(self, config_entry):
         """Initialize options flow."""
-        return self.hass.config_entries.async_get_entry(self.handler)
+        self.config_entry = config_entry
 
     async def async_step_init(self, user_input=None):
         """Manage the options."""
+        if user_input is not None:
+            # Update the config entry with new options
+            return self.async_create_entry(title="", data=user_input)
 
-        return self.async_abort(
-            reason="not_supported",
-            description_placeholders={
-                "message": "현재 이 기기의 옵션 설정은 지원되지 않습니다. 기기를 제거한 후 다시 추가해주세요.",
-            }
+        return self.async_show_form(
+            step_id="init",
+            data_schema=vol.Schema({
+                vol.Required("client_name", default=self.config_entry.data.get("client_name")): str,
+                vol.Required("host", default=self.config_entry.data.get("host")): str,
+                vol.Required("port", default=self.config_entry.data.get("port")): int,
+                vol.Optional("use_ssl", default=self.config_entry.data.get("use_ssl")): bool,
+                vol.Optional("auth_token", default=self.config_entry.data.get("auth_token")): str,
+            })
         )

@@ -3,9 +3,9 @@
   "name": "ICE HomeAssistant Component",
   "config_flow": true,
   "services": false,
-  "version": "0.0.1",
+  "version": "2.0.0-rc1",
   "codeowners": ["@kimiroo"],
   "requirements": [
-    "websockets>=12.0"
+    "python-socketio[client]>=5.0.0"
   ]
 }

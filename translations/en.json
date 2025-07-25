@@ -1,37 +1,35 @@
 {
-  "config": {
-    "step": {
-      "user": {
-          "title": "Add ICE Client",
-          "data": {
-              "pc_ip": "IP Address",
-              "pc_name": "Name (Optional)"
-          }
-      },
-      "init": {
-          "title": "Edit ICE Client",
-          "data": {
-              "pc_name": "Name (Optional)"
-          }
-      }
-    }
-  },
-  "services": {
-    "broadcast_message": {
-      "name": "Send Message to ICE Clients",
-      "description": "Sends a message to all connected ICE clients.",
-      "fields": {
-        "message": {
-          "name": "Message",
-          "description": "Select the type of message to send to the client."
+    "config": {
+        "step": {
+            "user": {
+                "title": "ICE Integration Setup",
+                "description": "Enter your ICE server details.",
+                "data": {
+                    "client_name": "Client Name",
+                    "host": "Host",
+                    "port": "Port",
+                    "use_ssl": "Use SSL/TLS (HTTPS)",
+                    "auth_token": "Authentication Token (Optional)"
+                }
+            }
+        },
+        "error": {
+            "cannot_connect": "Failed to connect. Please check host, port, SSL, and ensure the server is running and accessible.",
+            "timeout": "Connection established, but timed out waiting for a connection result message from the server. Ensure ICE server is healthy."
         }
-      }
+    },
+    "options": {
+        "step": {
+            "init": {
+                "title": "ICE Integration Options",
+                "data": {
+                    "client_name": "Client Name",
+                    "host": "Host",
+                    "port": "Port",
+                    "use_ssl": "Use HTTPS (Optional)",
+                    "auth_token": "Authentication Token (Optional)"
+                }
+            }
+        }
     }
-  },
-  "selector": {
-    "ws_message": {
-      "kill": "Kill Clients",
-      "movement": "Report Movement"
-    }
-  }
 }

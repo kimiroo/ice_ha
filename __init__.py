@@ -210,7 +210,6 @@ class ICEClientWrapper:
                 _LOGGER.error(f"Error in sensor update loop: {e}", exc_info=True)
                 await asyncio.sleep(5) # Wait longer on error to prevent rapid failures
 
-
     def start_update_sensors_loop(self):
         """Starts the continuous update sensors background task."""
         if self._update_sensors_task is None or self._update_sensors_task.done():
@@ -464,15 +463,16 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     hass.data[DOMAIN]['sensor_class'] = ICESocketIOSensor
 
     async def _handle_ha_event_to_socketio(event):
-        _LOGGER.debug(f"HA event to send to Socket.IO: {event.event_type} - {event.data}")
-        await socketio_client_wrapper.emit(
-            "event_ha",
-            {
-                "event": event.event_type,
-                "id": str(uuid.uuid4()),
-                "data": event.data
-            }
-        )
+        event_name = event.data.get('event', None)
+
+        if not isinstance(event_name, str) or not event_name:
+            _LOGGER.critical(f"\'ice_event\' data payload MUST contain \'event\' field in order to send \'event_ha\' to server. Received data: {event.data}")
+            return False
+
+        payload = event.data
+        payload['id'] = str(uuid.uuid4())
+
+        await socketio_client_wrapper.emit("event_ha", payload)
 
     # Register HA Event Listener
     hass.bus.async_listen("ice_event", _handle_ha_event_to_socketio)

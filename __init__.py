@@ -76,7 +76,7 @@ class ICEClientWrapper:
         event_name = data.get("event")
 
         if event_name:
-            await self.hass.bus.async_fire(
+            self.hass.bus.async_fire(
                 f"{DOMAIN}_event",
                 data
             )

@@ -7,5 +7,6 @@
   "codeowners": ["@kimiroo"],
   "requirements": [
     "python-socketio[client]>=5.0.0"
-  ]
+  ],
+  "event_types": ["ice_event"]
 }

@@ -5,7 +5,8 @@ import logging
 import uuid
 
 from homeassistant.config_entries import ConfigEntry
-from homeassistant.core import HomeAssistant
+from homeassistant.core import HomeAssistant, Event, callback
+from homeassistant.const import EVENT_HOMEASSISTANT_START, EVENT_HOMEASSISTANT_STOP
 
 from .const import DOMAIN
 
@@ -25,6 +26,7 @@ class ICEClientWrapper:
         self._connect_task = None # To hold the background connection task
         self._reconnect_loop_task = None # To hold the continuous reconnection task
         self._event_result_check_loop_task = None # To hold the continuous event result check task
+        self._ping_loop_task = None
 
         self._ha_event_object = {} # To hold HA event object for checking event result
 
@@ -185,6 +187,50 @@ class ICEClientWrapper:
                 _LOGGER.error(f"Error while stopping reconnect loop task: {e}")
             self._reconnect_loop_task = None # Clear the task reference
 
+    async def _run_ping_loop(self):
+        """
+        Continuously pings the ICE server.
+        This runs as a background task.
+        """
+        while True:
+            try:
+                if self._is_connected:
+                    self.sio.emit('ping')
+
+                else:
+                    _LOGGER.debug(f"Ping: Not connected.")
+
+                await asyncio.sleep(0.1)
+
+            except asyncio.CancelledError:
+                _LOGGER.info("Event result check loop task was cancelled.")
+                break # Exit the loop cleanly
+
+            except Exception as e:
+                _LOGGER.error(f"Error in result check loop: {e}", exc_info=True)
+                await asyncio.sleep(0.1)
+
+    def start_ping_loop(self):
+        """Starts the continuous ping task."""
+        if self._ping_loop_task is None or self._ping_loop_task.done():
+            _LOGGER.debug("Starting ping loop task.")
+            self._ping_loop_task = self.hass.async_create_task(self._run_ping_loop())
+        else:
+            _LOGGER.debug("Ping loop task is already running.")
+
+    async def stop_ping_loop(self):
+        """Stops the continuous ping task."""
+        if self._ping_loop_task and not self._ping_loop_task.done():
+            _LOGGER.debug("Stopping ping loop task.")
+            self._ping_loop_task.cancel()
+            try:
+                await self._ping_loop_task # Await for the task to finish cancelling
+            except asyncio.CancelledError:
+                pass # Expected when cancelling the task
+            except Exception as e:
+                _LOGGER.error(f"Error while stopping ping loop task: {e}")
+            self._ping_loop_task = None # Clear the task reference
+
     async def connect(self):
         """Connect to the Socket.IO server."""
 
@@ -272,13 +318,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     else:
         _LOGGER.info(f"Socket.IO client for {host}:{port} set up successfully.")
 
-    # Start the continuous reconnection loop in the background.
-    # The integration setup is considered successful regardless of the initial connection state,
-    # as the wrapper will try to connect/reconnect persistently.
-    socketio_client_wrapper.start_reconnect_loop()
-    # Start the continuous event result check loop in the background.
-    socketio_client_wrapper.start_event_result_check_loop()
-
     async def _handle_ha_event_to_socketio(event):
         _LOGGER.debug(f"HA event to send to Socket.IO: {event.event_type} - {event.data}")
         await socketio_client_wrapper.emit(
@@ -292,6 +331,27 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
 
     # Register HA Event Listener
     hass.bus.async_listen("ice_event", _handle_ha_event_to_socketio)
+
+    # Register a listener to start background tasks AFTER Home Assistant has fully started
+    @callback
+    async def _start_background_tasks(event: Event):
+        _LOGGER.info("Home Assistant has started. Initiating Socket.IO background tasks.")
+        socketio_client_wrapper.start_reconnect_loop()
+        socketio_client_wrapper.start_ping_loop()
+        socketio_client_wrapper.start_event_result_check_loop()
+
+    # Register a listener to stop background tasks when Home Assistant stops
+    @callback
+    async def _stop_background_tasks(event: Event):
+        _LOGGER.info("Home Assistant is stopping. Stopping Socket.IO background tasks.")
+        await socketio_client_wrapper.stop_event_result_check_loop()
+        await socketio_client_wrapper.stop_ping_loop()
+        await socketio_client_wrapper.stop_reconnect_loop()
+        await socketio_client_wrapper.disconnect() # Ensure disconnection as well
+
+    # Add the listener
+    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_START, _start_background_tasks)
+    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _stop_background_tasks)
 
     return True
 

@@ -313,10 +313,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     hass.data[DOMAIN][entry.entry_id] = socketio_client_wrapper
 
     # Only attempt to connect once during setup.
-    if not await socketio_client_wrapper.connect():
-        _LOGGER.warning("Failed to establish initial connection to Socket.IO server.")
-    else:
-        _LOGGER.info(f"Socket.IO client for {host}:{port} set up successfully.")
+    #if not await socketio_client_wrapper.connect():
+    #    _LOGGER.warning("Failed to establish initial connection to Socket.IO server.")
+    #else:
+    #    _LOGGER.info(f"Socket.IO client for {host}:{port} set up successfully.")
 
     async def _handle_ha_event_to_socketio(event):
         _LOGGER.debug(f"HA event to send to Socket.IO: {event.event_type} - {event.data}")

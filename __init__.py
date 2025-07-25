@@ -123,7 +123,7 @@ class ICEClientWrapper:
         """Starts the continuous event result check background task."""
         if self._event_result_check_loop_task is None or self._event_result_check_loop_task.done():
             _LOGGER.debug("Starting event result check loop task.")
-            self._event_result_check_loop_task = self.hass.async_create_task(self._run_event_result_check_loop())
+            self._event_result_check_loop_task = asyncio.create_task(self._run_event_result_check_loop())
         else:
             _LOGGER.debug("Event result check loop task is already running.")
 
@@ -170,7 +170,7 @@ class ICEClientWrapper:
         """Starts the continuous reconnection background task."""
         if self._reconnect_loop_task is None or self._reconnect_loop_task.done():
             _LOGGER.debug("Starting Socket.IO reconnection loop task.")
-            self._reconnect_loop_task = self.hass.async_create_task(self._run_reconnect_loop())
+            self._reconnect_loop_task = asyncio.create_task(self._run_reconnect_loop())
         else:
             _LOGGER.debug("Reconnect loop task is already running.")
 
@@ -214,7 +214,7 @@ class ICEClientWrapper:
         """Starts the continuous ping task."""
         if self._ping_loop_task is None or self._ping_loop_task.done():
             _LOGGER.debug("Starting ping loop task.")
-            self._ping_loop_task = self.hass.async_create_task(self._run_ping_loop())
+            self._ping_loop_task = asyncio.create_task(self._run_ping_loop())
         else:
             _LOGGER.debug("Ping loop task is already running.")
 

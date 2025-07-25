@@ -195,7 +195,7 @@ class ICEClientWrapper:
         while True:
             try:
                 if self._is_connected:
-                    self.sio.emit('ping')
+                    await self.sio.emit('ping')
 
                 else:
                     _LOGGER.debug(f"Ping: Not connected.")

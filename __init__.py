@@ -125,12 +125,12 @@ class ICEClientWrapper:
         self.is_normal = pong_data.get('isNormal', False)
 
         clients = pong_data.get('clientList', {})
-        alive_clients = pong_data.get('aliveClientCount', {})
+        alive_clients_count = pong_data.get('aliveClientCount', {})
 
         self.html_count = len(clients.get('html', []))
         self.pc_count = len(clients.get('pc', []))
-        self.alive_html_count = len(alive_clients.get('html', []))
-        self.alive_pc_count = len(alive_clients.get('pc', []))
+        self.alive_html_count = alive_clients_count.get('html', 0)
+        self.alive_pc_count = alive_clients_count.get('pc', 0)
 
         self.html_ok = self.alive_html_count > 0
         self.pc_ok = self.alive_pc_count > 0

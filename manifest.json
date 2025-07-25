@@ -2,11 +2,10 @@
   "domain": "ice_ha",
   "name": "ICE HomeAssistant Component",
   "config_flow": true,
-  "services": false,
+  "services": true,
   "version": "2.0.0-rc1",
   "codeowners": ["@kimiroo"],
   "requirements": [
     "python-socketio[client]>=5.0.0"
-  ],
-  "event_types": ["ice_event"]
+  ]
 }

@@ -4,6 +4,7 @@ import socketio
 import logging
 import uuid
 from typing import Any
+import voluptuous as vol
 
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, Event, callback
@@ -462,20 +463,28 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     hass.data[DOMAIN]['binary_sensor_class'] = ICESocketIOBinarySensor
     hass.data[DOMAIN]['sensor_class'] = ICESocketIOSensor
 
-    async def _handle_ha_event_to_socketio(event):
-        event_name = event.data.get('event', None)
+    async def _handle_ha_event_to_socketio(call):
+        event_name = call.data.get('event', None)
 
         if not isinstance(event_name, str) or not event_name:
-            _LOGGER.critical(f"\'ice_event\' data payload MUST contain \'event\' field in order to send \'event_ha\' to server. Received data: {event.data}")
+            _LOGGER.critical(f"\'ice_event\' data payload MUST contain \'event\' field in order to send \'event_ha\' to server. Received data: {call.data}")
             return False
 
-        payload = event.data
+        payload = call.data.copy()
         payload['id'] = str(uuid.uuid4())
 
         await socketio_client_wrapper.emit("event_ha", payload)
 
     # Register HA Event Listener
-    hass.bus.async_listen("ice_event", _handle_ha_event_to_socketio)
+    hass.services.async_register(
+        domain=DOMAIN,
+        service="ice_event",
+        service_func=_handle_ha_event_to_socketio,
+        schema=vol.Schema({
+            vol.Required("event"): str,
+            vol.Optional("data"): dict,
+        })
+    )
 
     # Register a listener to start background tasks AFTER Home Assistant has fully started
     @callback

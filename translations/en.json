@@ -31,5 +31,21 @@
                 }
             }
         }
+    },
+    "services": {
+        "ice_event": {
+            "name": "Send ICE Event",
+            "description": "Sends an ICE event that will be sent to the ICE server via SocketIO",
+            "fields": {
+                "event": {
+                    "name": "Event Name",
+                    "description": "The name/type of the event to fire"
+                },
+                "data": {
+                    "name": "Event Data",
+                    "description": "Additional data to include with the event (optional)"
+                }
+            }
+        }
     }
 }

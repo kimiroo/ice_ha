@@ -1,0 +1,17 @@
+
+ice_event:
+  name: Send ICE Event
+  description: Sends an ice_event
+  fields:
+    event:
+      name: Event
+      description: Event name
+      required: true
+      selector:
+        text:
+    data:
+      name: Additional Data
+      description: Additional data to include in the event
+      required: false
+      selector:
+        object:

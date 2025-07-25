@@ -149,7 +149,7 @@ class ICEClientWrapper:
 
         while True:
             try:
-                if not self._is_connected:
+                if not self.sio.connected:
                     _LOGGER.warning(f"Reconnect loop: Not connected, attempting to connect...")
                     connected = await self.connect()
                     if connected:
@@ -194,7 +194,7 @@ class ICEClientWrapper:
         """
         while True:
             try:
-                if self._is_connected:
+                if self.sio.connected:
                     await self.sio.emit('ping')
 
                 else:

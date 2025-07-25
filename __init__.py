@@ -72,18 +72,17 @@ class ICEClientWrapper:
 
     async def _on_ice_event(self, data):
         """Handle server commands and fire HA events."""
-        _LOGGER.info(f"Received 'server_command' from Socket.IO server: {data}")
-        command = data.get("command")
-        event_data = data.get("event_data", {})
+        _LOGGER.info(f"Received 'event' from Socket.IO server: {data}")
+        event_name = data.get("event")
 
-        if command:
+        if event_name:
             await self.hass.bus.async_fire(
-                f"{DOMAIN}_server_command_{command}",
-                event_data
+                f"{DOMAIN}_event",
+                data
             )
-            _LOGGER.debug(f"Fired HA event '{DOMAIN}_server_command_{command}' with data: {event_data}")
+            _LOGGER.debug(f"Fired HA event '{DOMAIN}_event' with data: {data}")
         else:
-            _LOGGER.warning("Received 'server_command' without a 'command' field.")
+            _LOGGER.warning("Received 'event' without a 'event' field.")
 
     async def _on_event_result(self, data):
         received_id = data.get('id', None)

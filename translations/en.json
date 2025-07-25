@@ -8,7 +8,7 @@
                     "client_name": "Client Name",
                     "host": "Host",
                     "port": "Port",
-                    "use_ssl": "Use SSL/TLS (HTTPS)",
+                    "use_ssl": "Use HTTPS (Optional)",
                     "auth_token": "Authentication Token (Optional)"
                 }
             }

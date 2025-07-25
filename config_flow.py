@@ -130,7 +130,7 @@ class ICEConfigFlow(config_entries.ConfigFlow, domain=DOMAIN):
             if not errors:
                 # If validation passes, create a config entry
                 return self.async_create_entry(
-                    title=f"Socket.IO Server ({host}:{port})",
+                    title=f"ICE Server ({host}:{port})",
                     data=user_input, # Store all user input data
                 )
 

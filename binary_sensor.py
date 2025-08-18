@@ -34,14 +34,6 @@ async def async_setup_entry(
             "initial_state": False
         },
         {
-            "device_id_on_server": "ice_normal_state",
-            "name": "ICE Normal",
-            "device_class": BinarySensorDeviceClass.SAFETY,
-            "ha_event_command": "pong_update",
-            "attribute_key": "is_normal",
-            "initial_state": False
-        },
-        {
             "device_id_on_server": "server_connection_status",
             "name": "Server Connection",
             "device_class": BinarySensorDeviceClass.CONNECTIVITY,
@@ -50,6 +42,7 @@ async def async_setup_entry(
             "initial_state": False
         },
         {
+            "type": "binary", # Explicitly mark type for clarity
             "device_id_on_server": "html_connection_status",
             "name": "HTML Connection",
             "device_class": BinarySensorDeviceClass.CONNECTIVITY,
@@ -58,7 +51,16 @@ async def async_setup_entry(
             "initial_state": False
         },
         {
-            "type": "binary", # Explicitly mark type for clarity, though not used in this file for filtering
+            "type": "binary", # Explicitly mark type for clarity
+            "device_id_on_server": "ha_connection_status",
+            "name": "HA Connection",
+            "device_class": BinarySensorDeviceClass.CONNECTIVITY,
+            "ha_event_command": "pong_update",
+            "attribute_key": "ha_connected",
+            "initial_state": False
+        },
+        {
+            "type": "binary", # Explicitly mark type for clarity
             "device_id_on_server": "pc_connection_status",
             "name": "PC Connection",
             "device_class": BinarySensorDeviceClass.CONNECTIVITY,

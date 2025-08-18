@@ -47,10 +47,8 @@ async def test_connection(client_name: str, host: str, port: int, use_ssl: bool 
     connect_kwargs = {}
 
     # Generate Headers
-    headers = {
-        'X-Client-Type': 'test',
-        'X-Client-Name': client_name
-    }
+    headers = {}
+
     # 1. If auth_token exists, add Authorization header.
     if auth_token:
         headers['Authorization'] = f'Bearer {auth_token}'

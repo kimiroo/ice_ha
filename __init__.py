@@ -24,32 +24,33 @@ class ICEClientWrapper:
         self.auth_token = auth_token
         self.sio = socketio.AsyncClient()
         self._is_connected = False
+        self.last_event_id
 
         self._reconnect_loop_task = None
         self._event_result_check_loop_task = None
         self._ping_loop_task = None
         self._update_sensors_task = None
 
-        self._ha_event_object = {} # To hold HA event object for checking event result
+        #self._ha_event_object = {} # To hold HA event object for checking event result
         self._registered_ha_sensors = {}
 
         # Sensors data
-        self.pong_timestamp = datetime.datetime(year=1900, month=1, day=1, hour=0, minute=0)
+        self.last_heartbeat = datetime.datetime(year=1900, month=1, day=1, hour=0, minute=0)
         self.is_armed = False
-        self.is_normal = False
         self.html_ok = False
+        self.ha_ok = False
         self.pc_ok = False
         self.html_count = 0
+        self.ha_count = 0
         self.pc_count = 0
-        self.alive_html_count = 0
-        self.alive_pc_count = 0
 
         # Register Socket.IO event handlers
         self.sio.on('connect', self._on_connect)
         self.sio.on('disconnect', self._on_disconnect)
         self.sio.on('event', self._on_ice_event)
-        self.sio.on('event_result', self._on_event_result)
-        self.sio.on('pong', self._on_pong)
+        self.sio.on('ping')
+        self.sio.on('get_result')
+        #self.sio.on('event_result', self._on_event_result)
 
     def register_ha_sensor(self, unique_id: str, sensor_entity: Any) -> None:
         """Register a Home Assistant sensor entity with the wrapper."""
@@ -62,9 +63,26 @@ class ICEClientWrapper:
             del self._registered_ha_sensors[unique_id]
             _LOGGER.debug(f"Unregistered HA sensor: {unique_id}")
 
+    async def handle_event(self, event):
+        self.last_event_id = event['id']
+        await self.sio.emit('ack', {'id': event['id']})
+
+        self.hass.bus.async_fire(
+            f"{DOMAIN}_event",
+            event
+        )
+        _LOGGER.debug(f"Fired HA event '{DOMAIN}_event' with data: {event}")
+
     async def _on_connect(self):
         self._is_connected = True
-        _LOGGER.info(f"Connected to Socket.IO server: {self.host}:{self.port}")
+        _LOGGER.info(f"Connected to ICE server: {self.host}:{self.port} Introducing self...")
+        payload = {
+            'name': self.client_name,
+            'type': 'pc'
+        }
+        if self.last_event_id:
+            payload['lastEventID'] = self.last_event_id
+        await self.sio.emit('introduce', payload)
 
     async def _on_disconnect(self):
         self._is_connected = False
@@ -73,67 +91,47 @@ class ICEClientWrapper:
     async def _on_ice_event(self, data):
         """Handle server commands and fire HA events."""
         _LOGGER.info(f"Received 'event' from Socket.IO server: {data}")
-        event_name = data.get("event")
+        event = data.get("event", {})
 
-        if event_name:
-            self.hass.bus.async_fire(
-                f"{DOMAIN}_event",
-                data
-            )
-            _LOGGER.debug(f"Fired HA event '{DOMAIN}_event' with data: {data}")
-        else:
-            _LOGGER.warning("Received 'event' without a 'event' field.")
+        self.handle_event(event)
 
-    async def _on_event_result(self, data):
-        received_id = data.get('id', None)
-        server_result = data.get('result', 'failed')
-        server_message = data.get('message', 'none')
-        saved_event_object = self._ha_event_object.get(received_id, None)
+    async def _on_ping(self, data):
+        self._is_connected = True
+        self.last_heartbeat = datetime.datetime.now()
+        await self.sio.emit('get')
 
-        time_now = datetime.datetime.now()
-        event_timestamp = saved_event_object.get('timestamp')
-        time_diff = time_now - event_timestamp
-        time_diff = time_diff.total_seconds()
+    async def _on_get_result(self, data = {}):
+        event_list = data.get('eventList', {})
+        client_list = data.get('clientList', {})
 
-        # Pop event object
-        if saved_event_object:
-            self._ha_event_object.pop(received_id)
-        else:
-            _LOGGER.warning(f"Received Event ID \'{received_id}\' is INVALID. (Not sent by this client or already validated event)")
+        self.is_armed = data.get('isArmed', False)
 
-        # Parse result
-        if server_result == 'success' and time_diff <= 1:
-            _LOGGER.info(f"Server reported handling Event ID \'{received_id}\' was successful. (message: {server_message})")
+        new_client_list_pc = []
+        new_client_list_ha = []
+        new_client_list_html = []
 
-        elif server_result == 'success' and time_diff > 1:
-            _LOGGER.warning(f"Event ID \'{received_id}\' took longer than expected. ({time_diff} seconds) (message: {server_message})")
+        for client in client_list:
+            if client['type'] == 'pc':
+                new_client_list_pc.append(client)
+            elif client['type'] == 'ha':
+                new_client_list_ha.append(client)
+            elif client['type'] == 'html':
+                new_client_list_html.append(client)
 
-        elif server_result != 'success' and time_diff <= 1:
-            _LOGGER.error(f"Server reported handling Event ID \'{received_id}\' failed. (reason: {server_message})")
+        self.pc_count = len(new_client_list_pc)
+        self.ha_count = len(new_client_list_ha)
+        self.html_count = len(new_client_list_html)
 
-        else:
-            _LOGGER.error(f"Server reported handling Event ID \'{received_id}\' failed and took longer than expected ({time_diff} seconds) (reason: {server_message})")
+        self.pc_ok = new_client_list_pc > 0
+        self.ha_ok = new_client_list_ha > 0
+        self.html_ok = new_client_list_html > 0
 
-    async def _on_pong(self, pong_data):
-        """
-        Process and record pong data
-        """
+        if event_list:
+            _LOGGER.warning(f'Detected a delay in processing event: {len(event_list)} events in queue')
+            for event in event_list:
+                await self.handle_event(event)
 
-        self.pong_timestamp = datetime.datetime.now()
-
-        self.is_armed = pong_data.get('isArmed', False)
-        self.is_normal = pong_data.get('isNormal', False)
-
-        clients = pong_data.get('clientList', {})
-        alive_clients_count = pong_data.get('aliveClientCount', {})
-
-        self.html_count = len(clients.get('html', []))
-        self.pc_count = len(clients.get('pc', []))
-        self.alive_html_count = alive_clients_count.get('html', 0)
-        self.alive_pc_count = alive_clients_count.get('pc', 0)
-
-        self.html_ok = self.alive_html_count > 0
-        self.pc_ok = self.alive_pc_count > 0
+        await self.sio.emit('pong')
 
     async def _run_update_sensors_loop(self):
         """
@@ -151,11 +149,11 @@ class ICEClientWrapper:
                     continue # Skip to the next iteration
 
                 time_now = datetime.datetime.now()
-                time_diff = time_now - self.pong_timestamp
+                time_diff = time_now - self.last_heartbeat
                 time_diff = time_diff.total_seconds()
 
                 # Determine if the server is considered "ok" based on connection and recent pong data
-                server_ok = self.sio.connected and (time_diff < 2) # Server is OK if connected and pong received within 2 seconds
+                server_ok = self.sio.connected and (time_diff < 1) # Server is OK if connected and pong received within 1 second
 
                 # Update the 'server_connection_status' binary sensor
                 for unique_id, sensor_entity in self._registered_ha_sensors.items():
@@ -177,10 +175,10 @@ class ICEClientWrapper:
                             sensor_entity.update_state(server_ok)
                         elif attribute_key == "is_armed":
                             sensor_entity.update_state(self.is_armed)
-                        elif attribute_key == "is_normal":
-                            sensor_entity.update_state(self.is_normal)
                         elif attribute_key == "html_connected":
                             sensor_entity.update_state(self.html_ok)
+                        elif attribute_key == "ha_connected":
+                            sensor_entity.update_state(self.ha_ok)
                         elif attribute_key == "pc_connected":
                             sensor_entity.update_state(self.pc_ok)
                         else:
@@ -190,12 +188,10 @@ class ICEClientWrapper:
                     elif isinstance(sensor_entity, sensor_class):
                         if attribute_key == "html_count":
                             sensor_entity.update_state(self.html_count)
+                        elif attribute_key == "ha_count":
+                            sensor_entity.update_state(self.ha_count)
                         elif attribute_key == "pc_count":
                             sensor_entity.update_state(self.pc_count)
-                        elif attribute_key == "alive_html_count":
-                            sensor_entity.update_state(self.alive_html_count)
-                        elif attribute_key == "alive_pc_count":
-                            sensor_entity.update_state(self.alive_pc_count)
                         else:
                             _LOGGER.debug(f"Unknown regular sensor attribute_key: {attribute_key}")
                     else:
@@ -230,57 +226,6 @@ class ICEClientWrapper:
             except Exception as e:
                 _LOGGER.error(f"Error while stopping update sensors loop task: {e}")
             self._update_sensors_task = None # Clear the task reference
-
-    async def _run_event_result_check_loop(self):
-        """
-        Continuously monitors event result.
-        This runs as a background task.
-        """
-        while True:
-            try:
-                time_now = datetime.datetime.now()
-                for event_id, event_obj in list(self._ha_event_object.items()):
-                    time_diff = time_now - event_obj['timestamp']
-                    time_diff = time_diff.total_seconds()
-
-                    if time_diff > (5 * 60): # 5 minutes
-                        _LOGGER.error(f"Event ID \'{event_id}\' is overdue. Removing event from saved event cache... (5 minutes)")
-                        self._ha_event_object.pop(event_id)
-
-                    elif time_diff > 1 and event_obj['is_valid']:
-                        _LOGGER.warning(f"Event ID \'{event_id}\' is taking longer than expected to be processed by server.")
-                        self._ha_event_object[event_id]['is_valid'] = False
-
-                await asyncio.sleep(0.1)
-
-            except asyncio.CancelledError:
-                _LOGGER.info("Event result check loop task was cancelled.")
-                break # Exit the loop cleanly
-
-            except Exception as e:
-                _LOGGER.error(f"Error in result check loop: {e}", exc_info=True)
-                await asyncio.sleep(0.1)
-
-    def start_event_result_check_loop(self):
-        """Starts the continuous event result check background task."""
-        if self._event_result_check_loop_task is None or self._event_result_check_loop_task.done():
-            _LOGGER.debug("Starting event result check loop task.")
-            self._event_result_check_loop_task = asyncio.create_task(self._run_event_result_check_loop())
-        else:
-            _LOGGER.debug("Event result check loop task is already running.")
-
-    async def stop_event_result_check_loop(self):
-        """Stops the continuous event result check background task."""
-        if self._event_result_check_loop_task and not self._event_result_check_loop_task.done():
-            _LOGGER.debug("Stopping event result check loop task.")
-            self._event_result_check_loop_task.cancel()
-            try:
-                await self._event_result_check_loop_task # Await for the task to finish cancelling
-            except asyncio.CancelledError:
-                pass # Expected when cancelling the task
-            except Exception as e:
-                _LOGGER.error(f"Error while stopping event result check loop task: {e}")
-            self._event_result_check_loop_task = None # Clear the task reference
 
     async def _run_reconnect_loop(self):
         """
@@ -329,50 +274,6 @@ class ICEClientWrapper:
                 _LOGGER.error(f"Error while stopping reconnect loop task: {e}")
             self._reconnect_loop_task = None # Clear the task reference
 
-    async def _run_ping_loop(self):
-        """
-        Continuously pings the ICE server.
-        This runs as a background task.
-        """
-        while True:
-            try:
-                if self.sio.connected:
-                    await self.sio.emit('ping')
-
-                else:
-                    _LOGGER.debug(f"Ping: Not connected.")
-
-                await asyncio.sleep(0.1)
-
-            except asyncio.CancelledError:
-                _LOGGER.info("Ping loop task was cancelled.")
-                break # Exit the loop cleanly
-
-            except Exception as e:
-                _LOGGER.error(f"Error in ping loop: {e}", exc_info=True)
-                await asyncio.sleep(0.1)
-
-    def start_ping_loop(self):
-        """Starts the continuous ping task."""
-        if self._ping_loop_task is None or self._ping_loop_task.done():
-            _LOGGER.debug("Starting ping loop task.")
-            self._ping_loop_task = asyncio.create_task(self._run_ping_loop())
-        else:
-            _LOGGER.debug("Ping loop task is already running.")
-
-    async def stop_ping_loop(self):
-        """Stops the continuous ping task."""
-        if self._ping_loop_task and not self._ping_loop_task.done():
-            _LOGGER.debug("Stopping ping loop task.")
-            self._ping_loop_task.cancel()
-            try:
-                await self._ping_loop_task # Await for the task to finish cancelling
-            except asyncio.CancelledError:
-                pass # Expected when cancelling the task
-            except Exception as e:
-                _LOGGER.error(f"Error while stopping ping loop task: {e}")
-            self._ping_loop_task = None # Clear the task reference
-
     async def connect(self):
         """Connect to the Socket.IO server."""
 
@@ -388,10 +289,8 @@ class ICEClientWrapper:
         connect_kwargs = {}
 
         # Generate Headers
-        headers = {
-            'X-Client-Type': 'ha',
-            'X-Client-Name': self.client_name
-        }
+        headers = {}
+
         # 1. If auth_token exists, add Authorization header.
         if self.auth_token:
             headers['Authorization'] = f'Bearer {self.auth_token}'
@@ -429,14 +328,16 @@ class ICEClientWrapper:
         """Emit an event to the Socket.IO server."""
         if self.sio.connected:
             # Save event object
-            event_object = dict(data)
-            event_object['timestamp'] = datetime.datetime.now()
-            event_object['is_valid'] = True
-            event_id = event_object.get('id', '__none__')
-            self._ha_event_object[event_id] = event_object
+            event_object = {
+                'id': str(uuid.uuid4()),
+                'event': event_name,
+                'type': 'ha',
+                'source': 'ha',
+                'data': data
+            }
 
             # Emit event to server
-            await self.sio.emit(event_name, data)
+            await self.sio.emit('event', event_object)
             _LOGGER.debug(f"Emitted '{event_name}' to Socket.IO server with data: {data}")
         else:
             _LOGGER.warning(f"Cannot emit '{event_name}': Socket.IO client not connected.")
@@ -491,8 +392,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         _LOGGER.info("Home Assistant has started. Initiating Socket.IO background tasks.")
         await socketio_client_wrapper.connect()
         socketio_client_wrapper.start_reconnect_loop()
-        socketio_client_wrapper.start_ping_loop()
-        socketio_client_wrapper.start_event_result_check_loop()
         socketio_client_wrapper.start_update_sensors_loop()
 
     # Register a listener to stop background tasks when Home Assistant stops
@@ -500,8 +399,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
     async def _stop_background_tasks(event: Event):
         _LOGGER.info("Home Assistant is stopping. Stopping Socket.IO background tasks.")
         await socketio_client_wrapper.stop_update_sensors_loop()
-        await socketio_client_wrapper.stop_event_result_check_loop()
-        await socketio_client_wrapper.stop_ping_loop()
         await socketio_client_wrapper.stop_reconnect_loop()
         await socketio_client_wrapper.disconnect()
 
@@ -526,8 +423,6 @@ async def async_unload_entry(hass: HomeAssistant, entry: ConfigEntry):
     socketio_client_wrapper = hass.data[DOMAIN].pop(entry.entry_id)
     if socketio_client_wrapper:
         await socketio_client_wrapper.stop_update_sensors_loop()
-        await socketio_client_wrapper.stop_event_result_check_loop()
-        await socketio_client_wrapper.stop_ping_loop()
         await socketio_client_wrapper.stop_reconnect_loop()
         await socketio_client_wrapper.disconnect()
 

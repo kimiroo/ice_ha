@@ -32,30 +32,21 @@ async def async_setup_entry(
             "initial_state": 0
         },
         {
+            "device_id_on_server": "ha_clients_count",
+            "name": "HA Clients Count",
+            "unit_of_measurement": "clients",
+            "icon": "mdi:account-group",
+            "ha_event_command": "pong_update",
+            "attribute_key": "ha_count",
+            "initial_state": 0
+        },
+        {
             "device_id_on_server": "pc_clients_count",
             "name": "PC Clients Count",
             "unit_of_measurement": "clients",
             "icon": "mdi:desktop-classic",
             "ha_event_command": "pong_update",
             "attribute_key": "pc_count",
-            "initial_state": 0
-        },
-        {
-            "device_id_on_server": "alive_html_clients_count",
-            "name": "Alive HTML Clients Count",
-            "unit_of_measurement": "clients",
-            "icon": "mdi:account-group",
-            "ha_event_command": "pong_update",
-            "attribute_key": "alive_html_count",
-            "initial_state": 0
-        },
-        {
-            "device_id_on_server": "alive_pc_clients_count",
-            "name": "Alive PC Clients Count",
-            "unit_of_measurement": "clients",
-            "icon": "mdi:desktop-classic",
-            "ha_event_command": "pong_update",
-            "attribute_key": "alive_pc_count",
             "initial_state": 0
         }
     ]

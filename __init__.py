@@ -24,7 +24,7 @@ class ICEClientWrapper:
         self.auth_token = auth_token
         self.sio = socketio.AsyncClient()
         self._is_connected = False
-        self.last_event_id
+        self.last_event_id = None
 
         self._reconnect_loop_task = None
         self._event_result_check_loop_task = None

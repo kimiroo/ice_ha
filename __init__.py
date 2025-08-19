@@ -154,7 +154,7 @@ class ICEClientWrapper:
         new_event_list = []
         acked_event_list = []
         for event in event_list:
-            if not await is_event_duplicate(event['id']):
+            if not is_event_duplicate(event['id']):
                 new_event_list.append(event)
             else:
                 acked_event_list.append(event)

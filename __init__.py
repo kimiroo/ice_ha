@@ -112,7 +112,7 @@ class ICEClientWrapper:
         _LOGGER.info(f"Received 'event' from Socket.IO server: {data}")
         event = data.get("event", {})
 
-        self.handle_event(event)
+        await self.handle_event(event)
 
     async def _on_ping(self, data = {}):
         self._is_connected = True

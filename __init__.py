@@ -48,8 +48,8 @@ class ICEClientWrapper:
         self.sio.on('connect', self._on_connect)
         self.sio.on('disconnect', self._on_disconnect)
         self.sio.on('event', self._on_ice_event)
-        self.sio.on('ping')
-        self.sio.on('get_result')
+        self.sio.on('ping', self._on_ping)
+        self.sio.on('get_result', self._on_get_result)
         #self.sio.on('event_result', self._on_event_result)
 
     def register_ha_sensor(self, unique_id: str, sensor_entity: Any) -> None:
@@ -75,6 +75,7 @@ class ICEClientWrapper:
 
     async def _on_connect(self):
         self._is_connected = True
+        self.last_heartbeat = datetime.datetime.now()
         _LOGGER.info(f"Connected to ICE server: {self.host}:{self.port} Introducing self...")
         payload = {
             'name': self.client_name,

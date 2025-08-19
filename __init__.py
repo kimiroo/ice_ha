@@ -22,9 +22,13 @@ class ICEClientWrapper:
         self.port = port
         self.use_ssl = use_ssl
         self.auth_token = auth_token
+
+        self.lock = asyncio.Lock()
         self.sio = socketio.AsyncClient()
         self._is_connected = False
         self.last_event_id = None
+        self.received_event_list = []
+        self.event_alive_duration = 10 # 10 seconds
 
         self._reconnect_loop_task = None
         self._event_result_check_loop_task = None
@@ -64,6 +68,8 @@ class ICEClientWrapper:
             _LOGGER.debug(f"Unregistered HA sensor: {unique_id}")
 
     async def handle_event(self, event):
+        self.received_event_list.append(event)
+
         self.last_event_id = event['id']
         await self.sio.emit('ack', {'id': event['id']})
 
@@ -72,6 +78,18 @@ class ICEClientWrapper:
             event
         )
         _LOGGER.debug(f"Fired HA event '{DOMAIN}_event' with data: {event}")
+
+    async def clean_old_events(self):
+        async with self.lock:
+            time_now = datetime.datetime.now()
+
+            def is_valid_event(event):
+                timestamp = datetime.datetime.fromisoformat(event['timestamp'])
+                time_diff = time_now - timestamp
+                return time_diff.total_seconds() < self.event_alive_duration
+
+            self.received_event_list = list(filter(is_valid_event, self.received_event_list))
+
 
     async def _on_connect(self):
         self._is_connected = True
@@ -127,10 +145,27 @@ class ICEClientWrapper:
         self.ha_ok = len(new_client_list_ha) > 0
         self.html_ok = len(new_client_list_html) > 0
 
-        if event_list:
+        def is_event_duplicate(event_id):
+            for event in self.received_event_list:
+                if event['id'] == event_id:
+                    return True
+            return False
+
+        new_event_list = []
+        acked_event_list = []
+        for event in event_list:
+            if not await is_event_duplicate(event['id']):
+                new_event_list.append(event)
+            else:
+                acked_event_list.append(event)
+
+        if new_event_list:
             _LOGGER.warning(f'Detected a delay in processing event: {len(event_list)} events in queue')
-            for event in event_list:
-                await self.handle_event(event)
+            tasks = [self.handle_event(event, is_internal=False) for event in new_event_list]
+            await asyncio.gather(*tasks)
+
+        for event in acked_event_list: # ACK again just to make sure
+            await self.sio.emit('ack', {'id': event['id']})
 
         await self.sio.emit('pong')
 

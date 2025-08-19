@@ -21,24 +21,6 @@ DATA_SCHEMA = vol.Schema({
 
 async def test_connection(client_name: str, host: str, port: int, use_ssl: bool = False, auth_token: str = ""):
     sio = socketio.AsyncClient()
-    sio_event = asyncio.Event()
-    sio_success = False
-    sio_message = ''
-
-    @sio.on('connected_ice')
-    async def on_connected(data):
-        nonlocal sio_success
-        _LOGGER.error(f"Received connected message during connection test: {data}")
-        sio_success = True
-        sio_event.set() # Signal that the message was received
-
-    @sio.on('error')
-    async def on_error(data):
-        nonlocal sio_success, sio_message
-        _LOGGER.error(f"Received error message during connection test: {data}")
-        sio_success = False
-        sio_message = data.get('message', '')
-        sio_event.set() # Signal that the message was received
 
     # Generate URI
     scheme = "https" if use_ssl else "http"
@@ -65,20 +47,16 @@ async def test_connection(client_name: str, host: str, port: int, use_ssl: bool 
 
         # Connect to the server
         await sio.connect(uri, **connect_kwargs)
-        _LOGGER.error("Successfully initiated Socket.IO connection for test. Waiting for 'connected_ice' or 'error' message...")
+        _LOGGER.error("Successfully connected to Socket.IO server.")
 
-        # Wait for the specific message with a timeout
-        await asyncio.wait_for(sio_event.wait(), timeout=connection_timeout)
-
-        _LOGGER.error(f"Test result received: Success={sio_success}, Message='{sio_message}'")
-        return sio_success, sio_message
+        return True, ''
 
     except socketio.exceptions.ConnectionError as e:
         _LOGGER.error(f"Socket.IO Connection Error to {uri}: {e}")
         return False, str(e) # Return the error message as string
 
     except asyncio.TimeoutError:
-        _LOGGER.error(f"Timed out waiting for 'connected_ice' or 'error' message from Socket.IO server at {uri} after {connection_timeout} seconds.")
+        _LOGGER.error(f"Timed out connecting to Socket.IO server at {uri} after {connection_timeout} seconds.")
         return False, "timeout"
 
     except Exception as e:

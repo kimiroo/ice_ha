@@ -96,7 +96,7 @@ class ICEClientWrapper:
 
         self.handle_event(event)
 
-    async def _on_ping(self, data):
+    async def _on_ping(self, data = {}):
         self._is_connected = True
         self.last_heartbeat = datetime.datetime.now()
         await self.sio.emit('get')
@@ -123,9 +123,9 @@ class ICEClientWrapper:
         self.ha_count = len(new_client_list_ha)
         self.html_count = len(new_client_list_html)
 
-        self.pc_ok = new_client_list_pc > 0
-        self.ha_ok = new_client_list_ha > 0
-        self.html_ok = new_client_list_html > 0
+        self.pc_ok = len(new_client_list_pc) > 0
+        self.ha_ok = len(new_client_list_ha) > 0
+        self.html_ok = len(new_client_list_html) > 0
 
         if event_list:
             _LOGGER.warning(f'Detected a delay in processing event: {len(event_list)} events in queue')

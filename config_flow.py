@@ -47,7 +47,7 @@ async def test_connection(client_name: str, host: str, port: int, use_ssl: bool 
 
         # Connect to the server
         await sio.connect(uri, **connect_kwargs)
-        _LOGGER.error("Successfully connected to Socket.IO server.")
+        _LOGGER.info("Successfully connected to Socket.IO server.")
 
         return True, ''
 

@@ -78,7 +78,7 @@ class ICEClientWrapper:
         _LOGGER.info(f"Connected to ICE server: {self.host}:{self.port} Introducing self...")
         payload = {
             'name': self.client_name,
-            'type': 'pc'
+            'type': 'ha'
         }
         if self.last_event_id:
             payload['lastEventID'] = self.last_event_id
@@ -234,16 +234,26 @@ class ICEClientWrapper:
         """
         reconnect_delay = 1
 
+        await asyncio.sleep(1) # Gracefull startup (prevent rush reconnect)
+
         while True:
             try:
+                # 1. Check if client is in a disconnected state first
                 if not self.sio.connected:
-                    _LOGGER.warning(f"Reconnect loop: Not connected, attempting to connect...")
+                    _LOGGER.warning("Reconnect loop: Not connected, attempting to connect...")
                     connected = await self.connect()
                     if connected:
                         _LOGGER.info("Reconnect loop: Successfully reconnected to Socket.IO server.")
                     else:
                         _LOGGER.warning(f"Reconnect loop: Connection failed. Retrying in {reconnect_delay} seconds...")
-                await asyncio.sleep(reconnect_delay)
+
+                # 2. Check for heartbeat timeout only when connected
+                else: # self.sio.connected is True
+                    time_now = datetime.datetime.now()
+                    time_diff = time_now - self.last_heartbeat
+                    if time_diff.total_seconds() > 1:
+                        _LOGGER.warning("Reconnect loop: No heartbeat received. Disconnecting and reconnecting...")
+                        await self.sio.disconnect()
 
             except asyncio.CancelledError:
                 _LOGGER.info("Reconnect loop task was cancelled.")
@@ -251,7 +261,9 @@ class ICEClientWrapper:
 
             except Exception as e:
                 _LOGGER.error(f"Error in reconnect loop: {e}", exc_info=True)
-                await asyncio.sleep(reconnect_delay)
+
+            # Sleep for a fixed delay regardless of what happened in the loop
+            await asyncio.sleep(reconnect_delay)
 
     def start_reconnect_loop(self):
         """Starts the continuous reconnection background task."""
@@ -300,6 +312,11 @@ class ICEClientWrapper:
         connect_kwargs["transports"] = ['websocket', 'polling']
 
         try:
+            try:
+                # Try to disconnect to reset the state
+                await self.sio.disconnect()
+            except Exception:
+                pass
             _LOGGER.info(f"Attempting to connect to Socket.IO server at {uri} with options: {connect_kwargs}")
             await self.sio.connect(uri, **connect_kwargs) # Pass all dynamic arguments
             # Note: The connection will block until connected or an error occurs.

@@ -25,7 +25,7 @@ async def test_connection(client_name: str, host: str, port: int, use_ssl: bool 
     sio_success = False
     sio_message = ''
 
-    @sio.on('connected')
+    @sio.on('connected_ice')
     async def on_connected(data):
         nonlocal sio_success
         _LOGGER.info(f"Received connected message during connection test: {data}")

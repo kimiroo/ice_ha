@@ -28,7 +28,7 @@ async def test_connection(client_name: str, host: str, port: int, use_ssl: bool 
     @sio.on('connected_ice')
     async def on_connected(data):
         nonlocal sio_success
-        _LOGGER.info(f"Received connected message during connection test: {data}")
+        _LOGGER.error(f"Received connected message during connection test: {data}")
         sio_success = True
         sio_event.set() # Signal that the message was received
 
@@ -65,12 +65,12 @@ async def test_connection(client_name: str, host: str, port: int, use_ssl: bool 
 
         # Connect to the server
         await sio.connect(uri, **connect_kwargs)
-        _LOGGER.info("Successfully initiated Socket.IO connection for test. Waiting for 'connected' or 'error' message...")
+        _LOGGER.error("Successfully initiated Socket.IO connection for test. Waiting for 'connected_ice' or 'error' message...")
 
         # Wait for the specific message with a timeout
         await asyncio.wait_for(sio_event.wait(), timeout=connection_timeout)
 
-        _LOGGER.info(f"Test result received: Success={sio_success}, Message='{sio_message}'")
+        _LOGGER.error(f"Test result received: Success={sio_success}, Message='{sio_message}'")
         return sio_success, sio_message
 
     except socketio.exceptions.ConnectionError as e:
@@ -78,7 +78,7 @@ async def test_connection(client_name: str, host: str, port: int, use_ssl: bool 
         return False, str(e) # Return the error message as string
 
     except asyncio.TimeoutError:
-        _LOGGER.error(f"Timed out waiting for 'connected' or 'error' message from Socket.IO server at {uri} after {connection_timeout} seconds.")
+        _LOGGER.error(f"Timed out waiting for 'connected_ice' or 'error' message from Socket.IO server at {uri} after {connection_timeout} seconds.")
         return False, "timeout"
 
     except Exception as e:

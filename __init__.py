@@ -439,13 +439,9 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         })
     )
 
-    # Register a listener to start background tasks AFTER Home Assistant has fully started
-    @callback
-    async def _start_background_tasks(event: Event):
-        _LOGGER.info("Home Assistant has started. Initiating Socket.IO background tasks.")
-        await socketio_client_wrapper.connect()
-        socketio_client_wrapper.start_reconnect_loop()
-        socketio_client_wrapper.start_update_sensors_loop()
+    # Start background tasks
+    socketio_client_wrapper.start_reconnect_loop()
+    socketio_client_wrapper.start_update_sensors_loop()
 
     # Register a listener to stop background tasks when Home Assistant stops
     @callback
@@ -456,7 +452,6 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry):
         await socketio_client_wrapper.disconnect()
 
     # Add the listener
-    hass.bus.async_listen_once(EVENT_HOMEASSISTANT_START, _start_background_tasks)
     hass.bus.async_listen_once(EVENT_HOMEASSISTANT_STOP, _stop_background_tasks)
 
     # Forward the setup to both binary_sensor and sensor platforms
